@@ -1,0 +1,21 @@
+# Install as a systemd *user* unit so it shares the desktop audio session:
+#   cp vinyl-declicker.service ~/.config/systemd/user/
+#   sed -i "s|__INSTALL_DIR__|$PWD|" ~/.config/systemd/user/vinyl-declicker.service
+#   systemctl --user daemon-reload && systemctl --user enable --now vinyl-declicker
+#   sudo loginctl enable-linger "$USER"   # so it runs without an active login
+[Unit]
+Description=Vinyl Declicker Headless Audio Engine
+After=network.target pipewire.service
+Wants=pipewire.service
+
+[Service]
+Type=simple
+WorkingDirectory=__INSTALL_DIR__
+ExecStartPre=/bin/sleep 5
+ExecStart=__INSTALL_DIR__/venv/bin/python run.py
+Restart=always
+RestartSec=3
+Environment="PYTHONUNBUFFERED=1"
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14110e">
+<title>Vinyl Processor</title>
+<style>
+  :root {
+    --bg: #14110e;
+    --bg-2: #1b1713;
+    --panel: #201b16;
+    --panel-edge: #342b22;
+    --groove: #0c0b0a;
+    --cream: #efe5cf;
+    --cream-dim: #b9ab92;
+    --muted: #857863;
+    --amber: #f2a93b;
+    --amber-glow: rgba(242, 169, 59, .45);
+    --label: #c8532a;
+    --label-2: #a8421f;
+    --red: #e0533a;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --sans: "Avenir Next", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    min-height: 100vh;
+    background:
+      radial-gradient(1200px 600px at 50% -200px, #2a221a 0%, transparent 70%),
+      var(--bg);
+    color: var(--cream);
+    font-family: var(--sans);
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(28px, env(safe-area-inset-bottom));
+  }
+  button, select { font: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+
+  .wrap { width: 100%; margin: 0 auto; }
+
+  /* ---------- header ---------- */
+  header {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 4px 2px 18px;
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand h1 {
+    margin: 0; font-family: var(--serif); font-weight: 400; font-style: italic;
+    font-size: 26px; letter-spacing: .2px;
+  }
+  .brand small {
+    font-size: 10.5px; letter-spacing: 2.4px; text-transform: uppercase; color: var(--muted);
+  }
+  .banner {
+    margin: 0 0 16px; padding: 10px 14px; border-radius: 10px;
+    background: rgba(224, 83, 58, .12); border: 1px solid rgba(224, 83, 58, .35); color: #f3b3a5; font-size: 13.5px;
+  }
+
+  /* ---------- layout ----------
+     One flat grid of cards that fills the screen: a wide monitor gets three or
+     four columns instead of two tall ones, so the page stops running off the
+     bottom. `.col` is display:contents so its children join the same grid. */
+  .grid {
+    display: grid; gap: 16px; align-items: start;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  }
+  .col { display: contents; }
+  .panel {
+    background: linear-gradient(180deg, #231d17 0%, var(--panel) 100%);
+    border: 1px solid var(--panel-edge);
+    border-radius: 18px;
+    box-shadow: 0 1px 0 rgba(255, 240, 210, .04) inset, 0 20px 40px -24px rgba(0, 0, 0, .8);
+  }
+  .panel-title {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 16px 20px 0; font-size: 10.5px; letter-spacing: 2.4px; text-transform: uppercase; color: var(--muted);
+  }
+
+  /* ---------- turntable ---------- */
+  .deck { padding: 22px 20px 20px; position: relative; overflow: hidden; }
+  .platter {
+    position: relative; width: min(100%, 340px); margin: 0 auto; aspect-ratio: 1;
+  }
+  .record {
+    position: absolute; inset: 4%; border-radius: 50%;
+    background:
+      radial-gradient(circle, transparent 0 31%, rgba(0,0,0,.6) 31.2% 32%, transparent 32.5%),
+      repeating-radial-gradient(circle, #131210 0 1.2px, #1b1a17 1.4px 2.6px),
+      var(--groove);
+    box-shadow: 0 0 0 6px #0a0908, 0 18px 40px -10px rgba(0,0,0,.9);
+    animation: spin 1.8s linear infinite;
+    animation-play-state: paused;
+  }
+  .record.spinning { animation-play-state: running; }
+  .record::before { /* lead-out band */
+    content: ""; position: absolute; inset: 29%; border-radius: 50%;
+    background: radial-gradient(circle, transparent 0 58%, #0e0d0c 59% 100%);
+  }
+  .label {
+    position: absolute; inset: 33.5%; border-radius: 50%;
+    background: radial-gradient(circle at 50% 50%, var(--label) 0 62%, var(--label-2) 63% 64%, var(--label) 65%);
+    display: grid; place-items: center; text-align: center; color: #f6e6d2;
+  }
+  .label-text { font-family: var(--serif); font-style: italic; font-size: clamp(11px, 3.2vw, 14px); line-height: 1.15; }
+  .label-text b { display: block; font-style: normal; font-family: var(--sans); font-weight: 600; font-size: .62em; letter-spacing: 2px; margin-top: 3px; opacity: .85; }
+  .label::after { /* spindle */
+    content: ""; position: absolute; width: 7%; height: 7%; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #e9e1d2, #8d8577 60%, #4a453d);
+    top: 46.5%; left: 46.5%;
+  }
+  .sheen { /* static reflection so the spin reads as motion */
+    position: absolute; inset: 4%; border-radius: 50%; pointer-events: none;
+    background: conic-gradient(from 20deg, transparent 0 8%, rgba(255,245,225,.07) 12%, transparent 18% 50%, rgba(255,245,225,.05) 62%, transparent 68%);
+  }
+  .tonearm {
+    position: absolute; top: -2%; right: -4%; width: 46%; height: 88%;
+    transform-origin: 78% 10%; transform: rotate(-24deg); transition: transform 1.4s cubic-bezier(.4,.1,.2,1);
+    pointer-events: none;
+  }
+  .tonearm.down { transform: rotate(0deg); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .record { animation: none; }
+    .tonearm { transition: none; }
+  }
+
+  .mode { text-align: center; margin-top: 14px; }
+  .mode-name { font-family: var(--serif); font-size: 30px; font-style: italic; line-height: 1.1; }
+  .mode-name.noise { color: var(--amber); }
+  .mode-sub { margin-top: 4px; font-size: 12px; letter-spacing: 1.6px; text-transform: uppercase; color: var(--muted); }
+
+  /* ---------- meters ---------- */
+  .meters { padding: 14px 20px 20px; }
+  .vu {
+    display: block; width: 100%; max-width: 340px; margin: 10px auto 0; height: auto;
+    border-radius: 12px; box-shadow: 0 0 0 1px #3c3126, 0 0 0 6px #17130f, 0 0 0 7px #3c3126;
+  }
+  .bar-row { display: grid; grid-template-columns: 74px 1fr 64px; align-items: center; gap: 12px; margin-top: 18px; }
+  .bar-row + .bar-row { margin-top: 10px; }
+  .bar-label { font-size: 10.5px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+  .bar { height: 8px; border-radius: 4px; background: #120f0c; box-shadow: inset 0 1px 2px rgba(0,0,0,.8); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; border-radius: 4px; background: linear-gradient(90deg, #7c5a2a, var(--amber)); transition: width .08s linear; }
+  .bar.removed i { background: linear-gradient(90deg, #6e2d1c, var(--red)); }
+  .bar-val { font-family: var(--mono); font-size: 12px; color: var(--cream-dim); text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* ---------- channel strips ---------- */
+  .strips { padding: 6px 0 4px; }
+  .strip {
+    display: grid; grid-template-columns: 1fr auto; gap: 14px 16px; align-items: center;
+    padding: 18px 20px; border-top: 1px solid rgba(255, 235, 200, .05);
+  }
+  .strip:first-child { border-top: 0; }
+  .strip-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .lamp {
+    flex: none; width: 12px; height: 12px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #5a4a38, #2a2219);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.6);
+    transition: background .25s, box-shadow .25s;
+  }
+  .lamp.on { background: radial-gradient(circle at 35% 35%, #ffe2a8, var(--amber) 55%, #b36d12); box-shadow: 0 0 12px var(--amber-glow), inset 0 0 0 1px rgba(0,0,0,.3); }
+  .lamp.warn.on { background: radial-gradient(circle at 35% 35%, #ffc4b4, var(--red) 55%, #8f2a17); box-shadow: 0 0 12px rgba(224,83,58,.5); }
+  .strip h2 { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 21px; line-height: 1.15; }
+  .strip p { margin: 3px 0 0; color: var(--muted); font-size: 13px; line-height: 1.35; }
+  .panel-note { font-size: 12px; color: var(--amber); margin-top: 5px; }
+  .strip-controls { display: flex; align-items: center; gap: 18px; }
+
+  /* switch position indicator: machined lever in a slot, mirrors the panel */
+  .toggle {
+    position: relative; flex: none; width: 60px; height: 32px; border-radius: 16px; border: 0; padding: 0;
+    background: linear-gradient(180deg, #0d0b09, #1d1813);
+    box-shadow: inset 0 2px 5px rgba(0,0,0,.85), 0 1px 0 rgba(255,240,210,.06);
+  }
+  .toggle.stale { opacity: .45; }
+  .toggle::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 50%;
+    background: radial-gradient(circle at 38% 30%, #fbf5ea, #c9bfae 45%, #7d7466 100%);
+    box-shadow: 0 2px 4px rgba(0,0,0,.6);
+    transition: transform .22s cubic-bezier(.3,.7,.4,1);
+  }
+  .toggle[data-on="true"] { background: linear-gradient(180deg, #5b3d12, #8a5a17); box-shadow: inset 0 2px 5px rgba(0,0,0,.6), 0 0 14px -2px var(--amber-glow); }
+  .toggle[data-on="true"]::after { transform: translateX(28px); }
+  .toggle.warn[data-on="true"] { background: linear-gradient(180deg, #5a1f14, #8e3120); box-shadow: inset 0 2px 5px rgba(0,0,0,.6), 0 0 14px -2px rgba(224,83,58,.5); }
+  .knob:focus-visible, select:focus-visible, .setup summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+
+  /* knob */
+  .knob-wrap { display: grid; justify-items: center; gap: 4px; user-select: none; -webkit-user-select: none; }
+  .knob {
+    --size: 58px; --angle: 0deg;
+    position: relative; width: var(--size); height: var(--size); border-radius: 50%; cursor: ns-resize; touch-action: none;
+    background: repeating-conic-gradient(from 0deg, #2b251f 0 4deg, #3a332b 4deg 8deg);
+    box-shadow: 0 6px 12px -4px rgba(0,0,0,.8), inset 0 0 0 1px rgba(0,0,0,.6);
+  }
+  .knob::before { /* cap */
+    content: ""; position: absolute; inset: 14%; border-radius: 50%;
+    background: radial-gradient(circle at 40% 30%, #5b5147, #2a241e 70%);
+    box-shadow: inset 0 1px 1px rgba(255,240,210,.15);
+  }
+  .knob .pointer {
+    position: absolute; inset: 0; transform: rotate(var(--angle));
+  }
+  .knob .pointer::after {
+    content: ""; position: absolute; left: calc(50% - 1.5px); top: 18%; width: 3px; height: 22%; border-radius: 2px;
+    background: var(--amber); box-shadow: 0 0 6px var(--amber-glow);
+  }
+  .knob.big { --size: 96px; }
+  .knob.disabled .pointer::after { background: #6d604f; box-shadow: none; }
+  .knob-label { font-size: 10px; letter-spacing: 1.8px; text-transform: uppercase; color: var(--muted); }
+  .knob-value { font-family: var(--mono); font-size: 12px; color: var(--cream-dim); font-variant-numeric: tabular-nums; }
+
+  .volume { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 20px; }
+  .volume h2 { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 21px; }
+  .volume p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+  .vol-readout { font-family: var(--serif); font-size: 42px; font-style: italic; line-height: 1; margin-top: 10px; font-variant-numeric: tabular-nums; }
+
+  /* ---------- setup drawer ---------- */
+  .setup { padding: 0; }
+  .setup summary {
+    list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+    padding: 18px 20px; font-size: 10.5px; letter-spacing: 2.4px; text-transform: uppercase; color: var(--muted);
+    border-radius: 18px;
+  }
+  .setup summary::-webkit-details-marker { display: none; }
+  .setup summary::after { content: "+"; font-size: 18px; color: var(--cream-dim); transition: transform .2s; }
+  .setup[open] summary::after { transform: rotate(45deg); }
+  .setup-body { padding: 0 20px 20px; display: grid; gap: 14px; }
+  .field { display: grid; gap: 6px; }
+  .field label { font-size: 12px; color: var(--cream-dim); }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  select {
+    width: 100%; appearance: none; -webkit-appearance: none;
+    background: #15120e url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23b9ab92' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 12px center;
+    border: 1px solid var(--panel-edge); border-radius: 10px; padding: 10px 32px 10px 12px; font-size: 14px;
+  }
+  .diag {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 4px;
+  }
+  .diag div { background: #15120e; border: 1px solid var(--panel-edge); border-radius: 10px; padding: 8px 10px; }
+  .diag dt { font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase; color: var(--muted); }
+  .diag dd { margin: 2px 0 0; font-family: var(--mono); font-size: 13px; color: var(--cream); overflow-wrap: anywhere; }
+  .hint { font-size: 12px; color: var(--muted); line-height: 1.4; }
+  .refresh { justify-self: start; background: none; border: 1px solid var(--panel-edge); border-radius: 8px; padding: 6px 10px; font-size: 12px; color: var(--cream-dim); cursor: pointer; }
+
+
+  /* option rows: these ARE web-controlled, unlike the panel switches */
+  .opts { padding: 4px 0 8px; }
+  .opt {
+    display: grid; grid-template-columns: 1fr auto; gap: 10px 14px; align-items: center;
+    padding: 12px 20px; border-top: 1px solid rgba(255, 235, 200, .05);
+  }
+  .opt h3 { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 17px; }
+  .opt p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.35; }
+  .opt .auto-val { color: var(--amber); font-family: var(--mono); font-size: 12px; }
+  .opt-toggle {
+    position: relative; flex: none; width: 46px; height: 25px; border-radius: 13px; border: 0; padding: 0;
+    cursor: pointer; background: linear-gradient(180deg, #0d0b09, #1d1813);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,.85);
+  }
+  .opt-toggle::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 19px; height: 19px; border-radius: 50%;
+    background: radial-gradient(circle at 38% 30%, #fbf5ea, #b9af9e 60%, #6f6759);
+    transition: transform .2s cubic-bezier(.3,.7,.4,1);
+  }
+  .opt-toggle[aria-checked="true"] { background: linear-gradient(180deg, #5b3d12, #8a5a17); box-shadow: inset 0 2px 4px rgba(0,0,0,.6), 0 0 10px -2px var(--amber-glow); }
+  .opt-toggle[aria-checked="true"]::after { transform: translateX(21px); }
+  .opt-toggle:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+  .slider-row { display: grid; grid-template-columns: 1fr 52px; gap: 12px; align-items: center; padding: 14px 20px 16px; }
+  input[type=range] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 4px; border-radius: 2px;
+    background: #120f0c; box-shadow: inset 0 1px 2px rgba(0,0,0,.8);
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%;
+    background: radial-gradient(circle at 38% 30%, #fbf5ea, #c9bfae 45%, #7d7466);
+    box-shadow: 0 2px 4px rgba(0,0,0,.6); cursor: pointer;
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 20px; height: 20px; border: 0; border-radius: 50%;
+    background: radial-gradient(circle at 38% 30%, #fbf5ea, #c9bfae 45%, #7d7466); cursor: pointer;
+  }
+  /* The spectrograms are the one panel that earns full width: more width is
+     more seconds of history. */
+  .spec-wrap { padding: 4px 20px 18px; grid-column: 1 / -1; }
+  .spec-label { display: flex; justify-content: space-between; align-items: baseline; font-size: 10.5px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin: 12px 0 5px; }
+  canvas.spec {
+    display: block; width: 100%; height: 120px; border-radius: 8px; background: #0b0a09;
+    box-shadow: inset 0 0 0 1px #2d2620;
+  }
+
+  @media (max-width: 420px) {
+    .brand small { display: none; }
+    .strip { grid-template-columns: 1fr; }
+    .strip-controls { justify-content: space-between; }
+    .knob { --size: 52px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1>Vinyl Processor</h1>
+      <small>Declick · Denoise</small>
+    </div>
+  </header>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <div class="grid">
+    <div class="col">
+      <section class="panel deck" aria-label="Now playing">
+        <div class="platter">
+          <div class="record" id="record">
+            <div class="label"><div class="label-text">Side A<b>33⅓ RPM</b></div></div>
+          </div>
+          <div class="sheen"></div>
+          <svg class="tonearm" id="tonearm" viewBox="0 0 100 200" aria-hidden="true">
+            <defs>
+              <linearGradient id="arm" x1="0" x2="1"><stop offset="0" stop-color="#8f877a"/><stop offset=".5" stop-color="#e8e1d3"/><stop offset="1" stop-color="#7b7367"/></linearGradient>
+            </defs>
+            <circle cx="78" cy="20" r="13" fill="#2b2620" stroke="#4d453b" stroke-width="2"/>
+            <circle cx="78" cy="20" r="6" fill="url(#arm)"/>
+            <path d="M78 22 L74 150 L52 178" fill="none" stroke="url(#arm)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="40" y="172" width="20" height="13" rx="2" transform="rotate(38 50 178)" fill="#1d1a16" stroke="#6b6357" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div class="mode">
+          <div class="mode-name" id="mode-name">-</div>
+          <div class="mode-sub" id="mode-sub">Connecting…</div>
+        </div>
+      </section>
+
+      <section class="panel meters" aria-label="Levels">
+        <div class="panel-title" style="padding:0"><span>Levels</span><span id="clip" hidden style="color:var(--red)">Peak</span></div>
+        <svg class="vu" viewBox="0 0 320 170" role="img" aria-label="Output level meter">
+          <defs>
+            <radialGradient id="face" cx="50%" cy="100%" r="100%">
+              <stop offset="0" stop-color="#fff4d8"/><stop offset="1" stop-color="#e2cfa4"/>
+            </radialGradient>
+          </defs>
+          <rect width="320" height="170" fill="url(#face)"/>
+          <g id="vu-scale" font-family="Georgia, serif" font-size="11" fill="#3b2f22" text-anchor="middle"></g>
+          <text x="160" y="118" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-size="22" fill="#3b2f22">VU</text>
+          <text x="160" y="136" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="7.5" letter-spacing="2" fill="#6b5a44">OUTPUT · 0 VU = -12 dBFS</text>
+          <g id="needle" style="transform-origin:160px 205px">
+            <line x1="160" y1="205" x2="160" y2="38" stroke="#1c1712" stroke-width="1.6"/>
+          </g>
+          <rect x="0" y="150" width="320" height="20" fill="#2a231c"/>
+          <circle cx="160" cy="160" r="9" fill="#14110e"/>
+        </svg>
+        <div class="bar-row">
+          <span class="bar-label">Input</span>
+          <div class="bar"><i id="bar-in"></i></div>
+          <span class="bar-val" id="val-in">-</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Removed</span>
+          <div class="bar removed"><i id="bar-removed"></i></div>
+          <span class="bar-val" id="val-removed">-</span>
+        </div>
+      </section>
+    </div>
+
+
+    <div class="col">
+      <section class="panel strips" aria-label="Processing">
+        <div class="panel-title" style="padding: 16px 20px 2px"><span>Processing</span><span id="panel-source">Front panel</span></div>
+        <div class="panel-note" id="panel-offline" style="padding: 0 20px" hidden>Front panel not connected, switch positions unknown.</div>
+        <div class="strip">
+          <div>
+            <div class="strip-head"><span class="lamp" id="lamp-declicker_on"></span><h2>Declicker</h2></div>
+          </div>
+          <div class="strip-controls">
+            <div class="knob-wrap">
+              <div class="knob" id="knob-sensitivity" data-key="sensitivity" data-min="0" data-max="10" data-step="0.5" data-default="5" data-format="sens"></div>
+              <span class="knob-label">Sensitivity</span>
+            </div>
+            <div class="toggle" data-key="declicker_on" data-on="false" role="img" aria-label="Declicker switch: off"></div>
+          </div>
+        </div>
+
+        <div class="strip">
+          <div>
+            <div class="strip-head"><span class="lamp" id="lamp-denoiser_on"></span><h2>Denoiser</h2></div>
+          </div>
+          <div class="strip-controls">
+            <div class="knob-wrap">
+              <div class="knob" id="knob-strength" data-key="strength" data-min="1" data-max="30" data-step="1" data-default="12" data-format="db"></div>
+              <span class="knob-label">Strength</span>
+            </div>
+            <div class="toggle" data-key="denoiser_on" data-on="false" role="img" aria-label="Denoiser switch: off"></div>
+          </div>
+        </div>
+
+        <div class="strip">
+          <div>
+            <div class="strip-head"><span class="lamp warn" id="lamp-monitor"></span><h2>Monitor</h2></div>
+          </div>
+          <div class="strip-controls">
+            <div class="toggle warn" data-key="monitor" data-on="false" role="img" aria-label="Monitor switch: off"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel volume" id="volume-panel" aria-label="Volume">
+        <div>
+          <h2>Volume</h2>
+          <p>Master output level</p>
+          <div class="vol-readout" id="vol-readout">-</div>
+        </div>
+        <div class="knob-wrap">
+          <div class="knob big" id="knob-volume" data-key="volume" data-min="0" data-max="100" data-step="1" data-default="50" data-format="pct"></div>
+        </div>
+      </section>
+
+
+      <section class="panel opts" aria-label="Tuning">
+        <div class="panel-title" style="padding: 16px 20px 2px"><span>Tuning</span><span id="tune-note">Automatic</span></div>
+
+        <div class="opt">
+          <div>
+            <h3>Auto sensitivity</h3>
+            <p>Watches how much is being removed and adjusts the declicker. <span class="auto-val" id="v-sens"></span></p>
+          </div>
+          <button class="opt-toggle" role="switch" aria-checked="false" data-opt="auto_sensitivity" aria-label="Auto sensitivity"></button>
+        </div>
+        <div class="opt">
+          <div>
+            <h3>Auto noise floor</h3>
+            <p>Measures the record's own noise floor from quiet passages. <span class="auto-val" id="v-floor"></span></p>
+          </div>
+          <button class="opt-toggle" role="switch" aria-checked="false" data-opt="auto_noise_floor" aria-label="Auto noise floor"></button>
+        </div>
+        <div class="opt">
+          <div>
+            <h3>Two-stage declicking</h3>
+            <p>Adds a second aggressive pass for big pops.</p>
+          </div>
+          <button class="opt-toggle" role="switch" aria-checked="false" data-opt="two_stage" aria-label="Two-stage declicking"></button>
+        </div>
+        <div class="opt">
+          <div>
+            <h3>Repair clipping</h3>
+            <p>Rebuilds clipped peaks on damaged pressings. Costs noticeable CPU.</p>
+          </div>
+          <button class="opt-toggle" role="switch" aria-checked="false" data-opt="declip" aria-label="Repair clipping"></button>
+        </div>
+        <div class="opt">
+          <div>
+            <h3>Rumble filter</h3>
+            <p>High-pass below 18 Hz for warp and turntable rumble.</p>
+          </div>
+          <button class="opt-toggle" role="switch" aria-checked="false" data-opt="rumble" aria-label="Rumble filter"></button>
+        </div>
+        <div class="opt">
+          <div>
+            <h3>Bass to mono</h3>
+            <p>Elliptical filter: mono below 150 Hz, which removes vertical groove noise.</p>
+          </div>
+          <button class="opt-toggle" role="switch" aria-checked="false" data-opt="bass_mono" aria-label="Bass to mono"></button>
+        </div>
+        <div class="slider-row">
+          <div>
+            <div class="spec-label" style="margin:0 0 8px"><span>Effect amount</span><span id="v-wet">100%</span></div>
+            <input type="range" id="wet" min="0" max="100" step="5" value="100" aria-label="Effect amount">
+          </div>
+          <div></div>
+        </div>
+      </section>
+
+      <details class="panel setup" id="setup">
+        <summary>Setup &amp; diagnostics</summary>
+        <div class="setup-body">
+          <div class="field">
+            <label for="input_device">Input</label>
+            <select id="input_device" data-key="input_device"></select>
+          </div>
+          <div class="field">
+            <label for="output_device">Output</label>
+            <select id="output_device" data-key="output_device"></select>
+          </div>
+          <button class="refresh" type="button" id="refresh-devices">Rescan devices</button>
+          <div class="field-row">
+            <div class="field">
+              <label for="sample_rate">Sample rate</label>
+              <select id="sample_rate" data-key="sample_rate" data-int>
+                <option value="44100">44.1 kHz</option>
+                <option value="48000">48 kHz</option>
+                <option value="88200">88.2 kHz</option>
+                <option value="96000">96 kHz</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="buffer_size">Buffer</label>
+              <select id="buffer_size" data-key="buffer_size" data-int>
+                <option value="0">Auto</option>
+                <option value="512">512</option>
+                <option value="1024">1024</option>
+                <option value="2048">2048</option>
+                <option value="4096">4096</option>
+              </select>
+            </div>
+          </div>
+          <p class="hint">48 kHz matches PipeWire and avoids resampling. Changing these briefly restarts audio.</p>
+          <div class="field-row">
+            <div class="field">
+              <label for="latency_ms">Delay while filtering</label>
+              <select id="latency_ms" data-key="latency_ms" data-int>
+                <option value="150">150 ms</option>
+                <option value="200">200 ms</option>
+                <option value="300">300 ms</option>
+                <option value="400">400 ms</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="idle_latency_ms">Delay when bypassed</label>
+              <select id="idle_latency_ms" data-key="idle_latency_ms" data-int>
+                <option value="10">10 ms</option>
+                <option value="15">15 ms</option>
+                <option value="30">30 ms</option>
+                <option value="60">60 ms</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="engage_rate_pct">Speed up to engage</label>
+              <select id="engage_rate_pct" data-key="engage_rate_pct" data-num>
+                <option value="0.5">0.5% · 9 cents, slowest</option>
+                <option value="1">1% · 17 cents</option>
+                <option value="2">2% · 35 cents, fastest</option>
+                <option value="3">3% · 52 cents</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="release_rate_pct">Speed up to release</label>
+              <select id="release_rate_pct" data-key="release_rate_pct" data-num>
+                <option value="0.25">0.25% · 4 cents</option>
+                <option value="0.5">0.5% · 9 cents</option>
+                <option value="1">1% · 17 cents</option>
+              </select>
+            </div>
+          </div>
+          <p class="hint">Higher engage speed brings the declicker in sooner but shifts pitch more while it
+            ramps. Release is usually inaudible below 1%.</p>
+          <dl class="diag">
+            <div><dt>Delay</dt><dd id="d-delay">-</dd></div>
+            <div><dt>Speed</dt><dd id="d-speed">-</dd></div>
+            <div><dt>DSP lag</dt><dd id="d-lag">-</dd></div>
+            <div><dt>Unprocessed</dt><dd id="d-fallback">-</dd></div>
+            <div><dt>Alignment</dt><dd id="d-aligned">-</dd></div>
+            <div><dt>Dropouts</dt><dd id="d-xruns">-</dd></div>
+            <div><dt>DSP restarts</dt><dd id="d-restarts">-</dd></div>
+            <div><dt>Setting swaps</dt><dd id="d-swaps">-</dd></div>
+            <div><dt>Panel</dt><dd id="d-panel">-</dd></div>
+          </dl>
+        </div>
+      </details>
+    </div>
+
+    <!-- Last, so it takes the final row full width instead of breaking row one -->
+    <section class="panel spec-wrap" aria-label="Spectrograms">
+      <div class="panel-title" style="padding: 12px 0 0"><span>Spectrogram</span><span id="spec-note">~25 s</span></div>
+      <div class="spec-label"><span>Program</span><span>what you hear</span></div>
+      <canvas class="spec" id="spec-out" width="1200" height="120"></canvas>
+      <div class="spec-label"><span>Removed</span><span>clicks &amp; noise taken out</span></div>
+      <canvas class="spec" id="spec-removed" width="1200" height="120"></canvas>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const SWITCH_KEYS = ['declicker_on', 'denoiser_on', 'monitor'];
+  let state = null;
+  let pending = 0;          // in-flight POSTs; skip applying polled state meanwhile
+  let lastOk = Date.now();
+
+  // ---------- api ----------
+  async function api(path, body) {
+    const opts = body === undefined ? {} : {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    };
+    const res = await fetch(path, opts);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    lastOk = Date.now();
+    return data;
+  }
+
+  async function send(changes) {
+    pending++;
+    try {
+      const s = await api('/api/state', changes);
+      if (pending === 1) render(s);
+    } catch (e) {
+      showBanner(`Couldn't apply change: ${e.message}`);
+    } finally {
+      pending--;
+    }
+  }
+
+  function showBanner(msg) {
+    const b = $('banner');
+    b.textContent = msg || '';
+    b.hidden = !msg;
+  }
+
+  // ---------- knobs ----------
+  const knobs = {};
+  function makeKnob(el, onInput, onCommit) {
+    const min = +el.dataset.min, max = +el.dataset.max, step = +el.dataset.step;
+    const fmt = el.dataset.format;
+    el.innerHTML = '<div class="pointer"></div>';
+    el.tabIndex = 0;
+    el.setAttribute('role', 'slider');
+    el.setAttribute('aria-valuemin', min);
+    el.setAttribute('aria-valuemax', max);
+    const valueEl = el.parentElement.querySelector('.knob-value') ||
+      el.parentElement.appendChild(Object.assign(document.createElement('span'), { className: 'knob-value' }));
+    const k = { el, value: min, dragging: false };
+
+    const label = (v) => fmt === 'db' ? `${v} dB` : fmt === 'pct' ? `${Math.round(v)}%` : v.toFixed(1);
+    const snap = (v) => Math.min(max, Math.max(min, Math.round(v / step) * step));
+    k.set = (v, silent) => {
+      k.value = snap(v);
+      const angle = -135 + (k.value - min) / (max - min) * 270;
+      el.style.setProperty('--angle', angle + 'deg');
+      el.setAttribute('aria-valuenow', k.value);
+      el.setAttribute('aria-valuetext', label(k.value));
+      valueEl.textContent = label(k.value);
+      if (!silent) onInput(k.value);
+    };
+
+    let startY = 0, startV = 0, commitTimer;
+    const commitSoon = () => { clearTimeout(commitTimer); commitTimer = setTimeout(() => onCommit(k.value), 250); };
+    el.addEventListener('pointerdown', (e) => {
+      k.dragging = true; startY = e.clientY; startV = k.value;
+      el.setPointerCapture(e.pointerId);
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (!k.dragging) return;
+      const range = max - min;
+      k.set(startV + (startY - e.clientY) / 180 * range);
+    });
+    const end = () => { if (k.dragging) { k.dragging = false; onCommit(k.value); } };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    el.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      k.set(k.value + (e.deltaY < 0 ? step : -step));
+      commitSoon();
+    }, { passive: false });
+    el.addEventListener('keydown', (e) => {
+      const big = (max - min) / 10;
+      const map = { ArrowUp: step, ArrowRight: step, ArrowDown: -step, ArrowLeft: -step, PageUp: big, PageDown: -big };
+      if (e.key in map) { e.preventDefault(); k.set(k.value + map[e.key]); commitSoon(); }
+      else if (e.key === 'Home') { e.preventDefault(); k.set(min); commitSoon(); }
+      else if (e.key === 'End') { e.preventDefault(); k.set(max); commitSoon(); }
+    });
+    el.addEventListener('dblclick', () => { k.set(+el.dataset.default); onCommit(k.value); });
+    return k;
+  }
+
+  for (const id of ['knob-sensitivity', 'knob-strength']) {
+    const el = $(id);
+    knobs[el.dataset.key] = makeKnob(el, () => {}, (v) => send({ [el.dataset.key]: v }));
+  }
+  knobs.volume = makeKnob($('knob-volume'),
+    (v) => { $('vol-readout').textContent = `${Math.round(v)}%`; },
+    async (v) => {
+      try { await api('/api/volume', { volume: v / 100 }); }
+      catch (e) { showBanner(`Couldn't set volume: ${e.message}`); }
+    });
+
+  // ---------- toggles & selects ----------
+  document.querySelectorAll('select[data-key]').forEach((sel) => {
+    sel.addEventListener('change', () => {
+      const v = 'int' in sel.dataset ? parseInt(sel.value, 10)
+        : 'num' in sel.dataset ? parseFloat(sel.value) : sel.value;
+      $('mode-sub').textContent = 'Restarting audio…';
+      send({ [sel.dataset.key]: v });
+    });
+  });
+
+  async function loadDevices(refresh) {
+    try {
+      const d = await api('/api/devices' + (refresh ? '?refresh=1' : ''));
+      fill($('input_device'), d.inputs);
+      fill($('output_device'), d.outputs);
+      if (state) render(state);
+    } catch (e) { /* retried on next state poll */ }
+  }
+  function fill(sel, names) {
+    sel.replaceChildren(new Option('Automatic (PipeWire)', ''), ...names.map((n) => new Option(n, n)));
+  }
+  $('refresh-devices').addEventListener('click', () => loadDevices(true));
+
+
+  // ---------- web-controlled options ----------
+  document.querySelectorAll('.opt-toggle').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const on = btn.getAttribute('aria-checked') !== 'true';
+      btn.setAttribute('aria-checked', String(on));
+      send({ [btn.dataset.opt]: on });
+    });
+  });
+  const wetEl = $('wet');
+  wetEl.addEventListener('input', () => { $('v-wet').textContent = `${wetEl.value}%`; });
+  wetEl.addEventListener('change', () => send({ wet: wetEl.value / 100 }));
+
+  function renderOptions(s) {
+    document.querySelectorAll('.opt-toggle').forEach((btn) => {
+      btn.setAttribute('aria-checked', String(!!s[btn.dataset.opt]));
+    });
+    if (document.activeElement !== wetEl) {
+      wetEl.value = Math.round(s.wet * 100);
+      $('v-wet').textContent = `${Math.round(s.wet * 100)}%`;
+    }
+    $('v-floor').textContent = s.auto_noise_floor ? `now ${s.noise_floor} dB` : 'off';
+    $('v-sens').textContent = s.auto_sensitivity ? `now ${s.sensitivity}` : 'off';
+    $('tune-note').textContent = (s.auto_sensitivity || s.auto_noise_floor) ? 'Automatic' : 'Manual';
+  }
+
+  // ---------- spectrograms ----------
+  const specs = {};
+  for (const [key, id, hue] of [['out', 'spec-out', 'amber'], ['removed', 'spec-removed', 'red']]) {
+    const cv = $(id);
+    // Match the bitmap to the rendered width, so one column is one pixel
+    // instead of a stretched smear, and so width buys history.
+    cv.width = Math.min(2400, Math.max(320, Math.round(cv.clientWidth)));
+    const ctx = cv.getContext('2d', { alpha: false });
+    ctx.fillStyle = '#0b0a09';
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    specs[key] = { cv, ctx, hue };
+  }
+  function paintColumn(spec, bands) {
+    const { cv, ctx, hue } = spec;
+    const h = cv.height, w = cv.width;
+    ctx.drawImage(cv, -1, 0);                       // scroll left by one pixel
+    const n = bands.length;
+    for (let i = 0; i < n; i++) {
+      const db = bands[i];
+      const level = Math.max(0, Math.min(1, (db + 80) / 80));
+      const y0 = h - Math.round((i + 1) * h / n);
+      const y1 = h - Math.round(i * h / n);
+      if (level <= 0.02) {
+        ctx.fillStyle = '#0b0a09';
+      } else if (hue === 'amber') {
+        const l = 12 + level * 62;
+        ctx.fillStyle = `hsl(${38 - level * 10} 85% ${l}%)`;
+      } else {
+        const l = 10 + level * 55;
+        ctx.fillStyle = `hsl(${14 - level * 8} 75% ${l}%)`;
+      }
+      ctx.fillRect(w - 1, y0, 1, Math.max(1, y1 - y0));
+    }
+  }
+
+  // ---------- render ----------
+  function renderMode(s) {
+    let name = 'Unprocessed';
+    if (s.monitor) name = 'Monitor';
+    else if (s.declicker_on && s.denoiser_on) name = 'Declicked & denoised';
+    else if (s.declicker_on) name = 'Declicked';
+    else if (s.denoiser_on) name = 'Denoised';
+    $('mode-name').textContent = s.running ? name : 'Stopped';
+    $('mode-name').classList.toggle('noise', s.running && s.monitor);
+    // Show the delay that is actually in force, not the target it is heading for.
+    const ramping = Math.abs(s.speed_pct) >= 0.01;
+    $('mode-sub').textContent = s.running
+      ? `${(s.sample_rate / 1000).toFixed(s.sample_rate % 1000 ? 1 : 0)} kHz · ${s.delay_ms} ms delay`
+        + (ramping ? ` · ${s.speed_pct > 0 ? '+' : ''}${s.speed_pct}% speed` : '')
+      : (s.error ? 'Audio device unavailable' : 'Starting…');
+    $('record').classList.toggle('spinning', s.running);
+    $('tonearm').classList.toggle('down', s.running);
+  }
+
+  function renderSwitches(s) {
+    // The three switches are driven by the front panel only; the page mirrors them.
+    const connected = !!(s.panel && s.panel.connected);
+    const sw = connected && s.panel.switches ? s.panel.switches : null;
+    const labels = { declicker_on: 'Declicker', denoiser_on: 'Denoiser', monitor: 'Monitor' };
+    for (const key of SWITCH_KEYS) {
+      const on = sw ? !!sw[key] : !!s[key];
+      const el = document.querySelector(`.toggle[data-key="${key}"]`);
+      el.dataset.on = String(on);
+      el.classList.toggle('stale', !connected);
+      el.setAttribute('aria-label', `${labels[key]} switch: ${on ? 'on' : 'off'}${connected ? '' : ' (panel offline)'}`);
+      $('lamp-' + key).classList.toggle('on', on);
+    }
+    $('panel-offline').hidden = connected;
+    $('panel-source').textContent = connected ? 'Front panel' : 'Panel offline';
+    $('knob-sensitivity').classList.toggle('disabled', !s.declicker_on);
+    $('knob-strength').classList.toggle('disabled', !s.denoiser_on);
+  }
+
+  function render(s) {
+    state = s;
+    renderMode(s);
+    renderSwitches(s);
+    renderOptions(s);
+    for (const key of ['sensitivity', 'strength']) {
+      if (!knobs[key].dragging) knobs[key].set(s[key], true);
+    }
+    for (const key of ['input_device', 'output_device', 'sample_rate', 'buffer_size',
+                       'latency_ms', 'idle_latency_ms', 'engage_rate_pct', 'release_rate_pct']) {
+      const sel = $(key);
+      if (document.activeElement !== sel) sel.value = s[key] == null ? '' : String(s[key]);
+    }
+
+    const ramping = Math.abs(s.speed_pct) >= 0.01;   // renderMode has its own copy
+    // No PipeWire means no volume control: hide it rather than fail loudly.
+    $('volume-panel').hidden = s.volume_control === false;
+    $('d-delay').textContent =
+      `${s.delay_ms} ms → ${s.idle ? s.idle_latency_ms : s.latency_ms} ms`;
+    $('d-speed').textContent = ramping
+      ? `${s.speed_pct > 0 ? '+' : ''}${s.speed_pct}% (${s.idle ? 'shedding' : 'building'} delay)`
+      : 'normal';
+    $('d-lag').textContent = s.dsp.lag_ms == null ? '-' : `${s.dsp.lag_ms} ms`;
+    $('d-fallback').textContent = `${(s.dsp.fallback_ms / 1000).toFixed(1)} s`;
+    // One column per 1024 input samples, so the visible history is width / that rate.
+    $('spec-note').textContent = `${Math.round(specs.out.cv.width / (s.sample_rate / 1024))} s`;
+    $('d-aligned').textContent = s.dsp.aligned
+      ? Object.entries(s.dsp.offsets_ms || {}).map(([k, v]) => `${k} ${v}ms`).join(' · ')
+      : (s.idle ? 'idle, ffmpeg stopped' : 'measuring…');
+    $('d-xruns').textContent = s.xruns;
+    $('d-restarts').textContent = s.dsp.restarts;
+    $('d-swaps').textContent = s.dsp.swaps;
+    $('d-panel').textContent = s.panel.connected ? (s.panel.raw || 'connected') : 'not connected';
+
+    showBanner(s.error ? `Audio problem: ${s.error}` : (s.auto && s.auto.overload) || '');
+  }
+
+  // ---------- VU meter ----------
+  // RMS, red above 0 VU, peaks handled by the Peak lamp. Referenced to -12 dBFS
+  // rather than -18: with vinyl crest factor that puts red at "about to clip".
+  const VU_REF_DBFS = -12, VU_LO = -20, VU_HI = 3, VU_SWEEP = 48;
+  const dbToVu = (db) => db - VU_REF_DBFS;
+  const vuToAngle = (vu) => {
+    const t = Math.min(1, Math.max(0, (vu - VU_LO) / (VU_HI - VU_LO)));
+    return -VU_SWEEP + Math.pow(t, 1.6) * VU_SWEEP * 2;  // compressed at the bottom, like the real thing
+  };
+  (function drawScale() {
+    const g = $('vu-scale'), cx = 160, cy = 205, NS = 'http://www.w3.org/2000/svg';
+    const arc = (r, a0, a1, color, w) => {
+      const p = (a) => [cx + r * Math.sin(a * Math.PI / 180), cy - r * Math.cos(a * Math.PI / 180)];
+      const [x0, y0] = p(a0), [x1, y1] = p(a1);
+      const path = document.createElementNS(NS, 'path');
+      path.setAttribute('d', `M${x0} ${y0} A${r} ${r} 0 0 1 ${x1} ${y1}`);
+      path.setAttribute('fill', 'none'); path.setAttribute('stroke', color); path.setAttribute('stroke-width', w);
+      g.appendChild(path);
+    };
+    arc(150, -VU_SWEEP, vuToAngle(0), '#3b2f22', 1.4);
+    arc(150, vuToAngle(0), VU_SWEEP, '#c23b22', 4);
+    for (const db of [-20, -10, -7, -5, -3, 0, 3]) {
+      const a = vuToAngle(db) * Math.PI / 180;
+      const tick = document.createElementNS(NS, 'line');
+      tick.setAttribute('x1', cx + 146 * Math.sin(a)); tick.setAttribute('y1', cy - 146 * Math.cos(a));
+      tick.setAttribute('x2', cx + 158 * Math.sin(a)); tick.setAttribute('y2', cy - 158 * Math.cos(a));
+      tick.setAttribute('stroke', db >= 0 ? '#c23b22' : '#3b2f22'); tick.setAttribute('stroke-width', 1.4);
+      g.appendChild(tick);
+      const t = document.createElementNS(NS, 'text');
+      t.setAttribute('x', cx + 170 * Math.sin(a)); t.setAttribute('y', cy - 170 * Math.cos(a) + 4);
+      if (db >= 0) t.setAttribute('fill', '#c23b22');
+      t.textContent = db === 0 ? '0' : (db > 0 ? '+' + db : db);
+      g.appendChild(t);
+    }
+  })();
+
+  let specSeq = 0;
+  let target = { in: -90, out: -90, removed: -90, vu: VU_LO };
+  let shown = { in: -90, out: -90, removed: -90, vu: VU_LO };
+  let peakUntil = 0;
+  const VU_BALLISTIC = 0.054;   // ~300 ms to settle at 60 fps, like a real VU movement
+  function animate() {
+    for (const k of Object.keys(shown)) {
+      if (k === 'vu') {
+        shown.vu += (target.vu - shown.vu) * VU_BALLISTIC;   // symmetric, unlike the bars
+        continue;
+      }
+      const rising = target[k] > shown[k];
+      shown[k] += (target[k] - shown[k]) * (rising ? 0.35 : 0.08);
+    }
+    $('needle').style.transform = `rotate(${vuToAngle(shown.vu)}deg)`;
+    const pct = (db) => `${Math.min(100, Math.max(0, (db + 60) / 60 * 100))}%`;
+    $('bar-in').style.width = pct(shown.in);
+    $('bar-removed').style.width = pct(shown.removed);
+    $('clip').hidden = Date.now() > peakUntil;
+    requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
+
+  async function pollMeters() {
+    if (document.visibilityState === 'visible' && state && state.running) {
+      try {
+        const m = await api(`/api/meters?since=${specSeq}`);
+        target = { in: m.in, out: m.out, removed: m.removed, vu: dbToVu(m.out_rms) };
+        if (m.spectrum && m.spectrum.length) {
+          for (const col of m.spectrum) {
+            paintColumn(specs.out, col.out);
+            paintColumn(specs.removed, col.removed);
+            specSeq = col.seq;
+          }
+        } else if (m.seq != null && specSeq === 0) {
+          specSeq = m.seq;
+        }
+        if (m.out > -1) peakUntil = Date.now() + 1200;
+        $('val-in').textContent = m.in <= -99 ? '-' : `${m.in.toFixed(0)} dB`;
+        $('val-removed').textContent = m.removed <= -99 ? '-' : `${m.removed.toFixed(0)} dB`;
+      } catch (e) { /* state poll reports connectivity */ }
+    } else {
+      target = { in: -90, out: -90, removed: -90, vu: VU_LO };
+    }
+    setTimeout(pollMeters, 90);
+  }
+
+  // ---------- polling ----------
+  async function pollState() {
+    try {
+      const s = await api('/api/state');
+      if (!pending) render(s);
+    } catch (e) {
+      if (Date.now() - lastOk > 3000) showBanner('Lost connection to the audio server, retrying…');
+    }
+    setTimeout(pollState, 1000);
+  }
+
+  async function pollVolume() {
+    if (state && state.volume_control === false) {
+      setTimeout(pollVolume, 5000);
+      return;
+    }
+    if (!knobs.volume.dragging) {
+      try {
+        const v = await api('/api/volume');
+        knobs.volume.set(v.volume * 100, true);
+        $('vol-readout').textContent = v.muted ? 'Muted' : `${Math.round(v.volume * 100)}%`;
+      } catch (e) { $('vol-readout').textContent = '-'; }
+    }
+    setTimeout(pollVolume, 3000);
+  }
+
+  loadDevices(false);
+  pollState();
+  pollMeters();
+  pollVolume();
+})();
+</script>
+</body>
+</html>
